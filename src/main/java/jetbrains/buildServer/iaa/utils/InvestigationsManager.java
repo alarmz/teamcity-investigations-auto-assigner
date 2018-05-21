@@ -18,7 +18,6 @@ package jetbrains.buildServer.iaa.utils;
 
 import java.util.*;
 import jetbrains.buildServer.BuildProject;
-import jetbrains.buildServer.iaa.TestProblemInfo;
 import jetbrains.buildServer.responsibility.BuildProblemResponsibilityEntry;
 import jetbrains.buildServer.responsibility.ResponsibilityEntry;
 import jetbrains.buildServer.responsibility.ResponsibilityFacadeEx;
@@ -27,9 +26,6 @@ import jetbrains.buildServer.serverSide.SBuild;
 import jetbrains.buildServer.serverSide.SProject;
 import jetbrains.buildServer.serverSide.STest;
 import jetbrains.buildServer.serverSide.audit.*;
-import jetbrains.buildServer.serverSide.impl.audit.filters.ActionTypesFilter;
-import jetbrains.buildServer.serverSide.impl.audit.filters.BuildProblemAuditId;
-import jetbrains.buildServer.serverSide.impl.audit.filters.ObjectTypeFilter;
 import jetbrains.buildServer.serverSide.impl.audit.filters.TestId;
 import jetbrains.buildServer.serverSide.problems.BuildProblem;
 import jetbrains.buildServer.users.User;
@@ -83,43 +79,12 @@ public class InvestigationsManager {
   public User findPreviousResponsible(@NotNull final SProject project,
                                       @NotNull final SBuild sBuild,
                                       @NotNull final BuildProblem problem) {
-    User responsible = this.findAmongEntries(project, sBuild, problem.getAllResponsibilities());
-    if (responsible == null) {
-      responsible = this.findInAudit(problem);
-    }
-    return responsible;
+    return this.findAmongEntries(project, sBuild, problem.getAllResponsibilities());
   }
 
   @Nullable
-  private User findInAudit(final BuildProblem buildProblem) {
-    AuditLogBuilder builder = myAuditLogProvider.getBuilder();
-    builder.setObjectId(BuildProblemAuditId.fromBuildProblem(buildProblem).asString());
-    builder.addFilter(new ActionTypesFilter(ActionType.BUILD_PROBLEM_MARK_AS_FIXED));
-    builder.addFilter(new ObjectTypeFilter(ObjectType.BUILD_PROBLEM));
-    AuditLogAction lastAction = builder.findLastAction();
-    if (lastAction == null) {
-      return null;
-    }
-
-    for (ObjectWrapper obj : lastAction.getObjects()) {
-      Object user = obj.getObject();
-      if (user instanceof User) {
-        return (User)user;
-      }
-    }
-    return null;
-  }
-
-  @Nullable
-  public User findPreviousResponsible(@NotNull final TestProblemInfo testProblemInfo) {
-    SProject sProject = testProblemInfo.getSProject();
-    SBuild sBuild = testProblemInfo.getSBuild();
-    STest sTest = testProblemInfo.getSTest();
-    User responsible = this.findAmongEntries(sProject, sBuild, sTest.getAllResponsibilities());
-    if (responsible == null) {
-      responsible = testProblemInfo.getTestId2Responsible().get(sTest.getTestNameId());
-    }
-    return responsible;
+  public User findPreviousResponsible(SProject sProject, SBuild sBuild, STest sTest) {
+    return this.findAmongEntries(sProject, sBuild, sTest.getAllResponsibilities());
   }
 
   @Nullable

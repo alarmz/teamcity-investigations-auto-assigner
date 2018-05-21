@@ -18,6 +18,9 @@ package jetbrains.buildServer.iaa.heuristics;
 
 import com.intellij.openapi.util.Pair;
 import jetbrains.buildServer.iaa.ProblemInfo;
+import jetbrains.buildServer.serverSide.STest;
+import jetbrains.buildServer.serverSide.STestRun;
+import jetbrains.buildServer.serverSide.problems.BuildProblem;
 import jetbrains.buildServer.users.User;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -40,11 +43,18 @@ public interface Heuristic {
   @NotNull
   String getDescription();
 
-  /**
-   * Try to detect which person is probably responsible.
-   * @param problemInfo {@link ProblemInfo} object which presents known information about the problem.
-   * @return probable responsible user data with a short description why the algorithm selected particular user.
-   */
+  ///**
+  // * Try to detect which person is probably responsible.
+  // * @param problemInfo {@link ProblemInfo} object which presents known information about the problem.
+  // * @return probable responsible user data with a short description why the algorithm selected particular user.
+  // */
+  //@Nullable
+  //Pair<User, String> findResponsibleUser(@NotNull ProblemInfo problemInfo);
+
+
   @Nullable
-  Pair<User, String> findResponsibleUser(@NotNull ProblemInfo problemInfo);
+  Pair<User, String> findResponsibleUser(@NotNull STestRun sTest);
+
+  @Nullable
+  Pair<User, String> findResponsibleUser(@NotNull BuildProblem buildProblem);
 }

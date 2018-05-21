@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2014 JetBrains s.r.o.
+ * Copyright 2000-2018 JetBrains s.r.o.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,16 @@
  * limitations under the License.
  */
 
-package jetbrains.buildServer.iaa;
+package jetbrains.buildServer.iaa.heuristics;
 
+import java.util.List;
 import jetbrains.buildServer.serverSide.SBuild;
 import jetbrains.buildServer.serverSide.STestRun;
-import jetbrains.buildServer.serverSide.impl.problems.BuildProblemImpl;
-import org.jetbrains.annotations.NotNull;
+import jetbrains.buildServer.serverSide.problems.BuildProblem;
 
-public interface NewTestsAndProblemsProcessor {
-  void processFailedTest(@NotNull SBuild build,
-                         @NotNull STestRun testRun,
-                         @NotNull TestProblemInfo problemInfo);
+public interface HeuristicFactory {
+  Heuristic createHeuristic(SBuild sBuild,
+                            List<STestRun> applicableTestRuns,
+                            List<BuildProblem> applicableBuildProblems);
 
-  void onBuildProblemOccurred(@NotNull SBuild build, @NotNull BuildProblemImpl problem);
 }

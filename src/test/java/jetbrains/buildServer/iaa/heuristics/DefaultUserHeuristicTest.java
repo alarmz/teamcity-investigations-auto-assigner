@@ -22,9 +22,7 @@ import java.util.HashMap;
 import jetbrains.buildServer.BaseTestCase;
 import jetbrains.buildServer.iaa.ProblemInfo;
 import jetbrains.buildServer.iaa.common.Constants;
-import jetbrains.buildServer.serverSide.SBuild;
-import jetbrains.buildServer.serverSide.SBuildFeatureDescriptor;
-import jetbrains.buildServer.serverSide.SProject;
+import jetbrains.buildServer.serverSide.*;
 import jetbrains.buildServer.users.User;
 import jetbrains.buildServer.users.UserModelEx;
 import jetbrains.buildServer.users.impl.UserEx;
@@ -41,21 +39,28 @@ public class DefaultUserHeuristicTest extends BaseTestCase {
   private UserModelEx myUserModelEx;
   private SBuild mySBuildMock;
   private UserEx myUserEx;
-  private ProblemInfo myProblemInfo;
   private static final String USER_NAME = "rugpanov";
   private HashMap<String, String> myBuildFeatureParams;
+  private STestRun mySTestRun;
 
   @BeforeMethod
   @Override
   protected void setUp() throws Exception {
     super.setUp();
     myUserModelEx = Mockito.mock(UserModelEx.class);
-    myHeuristic = new DefaultUserHeuristic(myUserModelEx);
-    final SBuildFeatureDescriptor descriptor = Mockito.mock(SBuildFeatureDescriptor.class);
     mySBuildMock = Mockito.mock(SBuild.class);
-    final SProject sProjectMock = Mockito.mock(SProject.class);
+    mySTestRun = Mockito.mock(STestRun.class);
+    final SBuildType SBuildType = Mockito.mock(jetbrains.buildServer.serverSide.SBuildType.class);
     myUserEx = Mockito.mock(UserEx.class);
-    myProblemInfo = new ProblemInfo(mySBuildMock, sProjectMock, "problem text");
+    myHeuristic = new DefaultUserHeuristic(myUserModelEx, mySBuildMock);
+
+    final SProject sProjectMock = Mockito.mock(SProject.class);
+
+
+    final SBuildFeatureDescriptor descriptor = Mockito.mock(SBuildFeatureDescriptor.class);
+
+    when(mySBuildMock.getBuildType()).thenReturn(SBuildType);
+    when(SBuildType.getProject()).thenReturn(sProjectMock);
 
     myBuildFeatureParams = new HashMap<>();
     when(
@@ -66,24 +71,24 @@ public class DefaultUserHeuristicTest extends BaseTestCase {
 
   public void TestFeatureIsDisabled() {
     when(mySBuildMock.getBuildFeaturesOfType(Constants.BUILD_FEATURE_TYPE)).thenReturn(Collections.emptyList());
-    Pair<User, String> responsible = myHeuristic.findResponsibleUser(myProblemInfo);
+    Pair<User, String> responsible = myHeuristic.findResponsibleUser(mySTestRun);
     Assert.assertNull(responsible);
   }
 
   public void TestNoResponsibleSpecified() {
     //myBuildFeatureParams is empty
-    Pair<User, String> responsible = myHeuristic.findResponsibleUser(myProblemInfo);
+    Pair<User, String> responsible = myHeuristic.findResponsibleUser(mySTestRun);
     Assert.assertNull(responsible);
 
     myBuildFeatureParams.put(Constants.DEFAULT_RESPONSIBLE, "");
-    responsible = myHeuristic.findResponsibleUser(myProblemInfo);
+    responsible = myHeuristic.findResponsibleUser(mySTestRun);
     Assert.assertNull(responsible);
   }
 
   public void TestResponsibleNotFound() {
     myBuildFeatureParams.put(Constants.DEFAULT_RESPONSIBLE, USER_NAME);
     when(myUserModelEx.findUserAccount(null, USER_NAME)).thenReturn(null);
-    Pair<User, String> responsible = myHeuristic.findResponsibleUser(myProblemInfo);
+    Pair<User, String> responsible = myHeuristic.findResponsibleUser(mySTestRun);
 
     Assert.assertNull(responsible);
   }
@@ -91,7 +96,7 @@ public class DefaultUserHeuristicTest extends BaseTestCase {
   public void TestResponsibleFound() {
     myBuildFeatureParams.put(Constants.DEFAULT_RESPONSIBLE, USER_NAME);
     when(myUserModelEx.findUserAccount(null, USER_NAME)).thenReturn(myUserEx);
-    Pair<User, String> responsible = myHeuristic.findResponsibleUser(myProblemInfo);
+    Pair<User, String> responsible = myHeuristic.findResponsibleUser(mySTestRun);
 
     Assert.assertNotNull(responsible);
     Assert.assertEquals(responsible.first, myUserEx);

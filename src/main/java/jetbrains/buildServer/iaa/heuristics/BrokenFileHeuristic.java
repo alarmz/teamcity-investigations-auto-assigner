@@ -21,15 +21,16 @@ import com.intellij.openapi.util.Pair;
 import java.io.File;
 import java.util.*;
 import java.util.stream.Collectors;
-import jetbrains.buildServer.iaa.ProblemInfo;
+import jetbrains.buildServer.BuildProblemTypes;
 import jetbrains.buildServer.iaa.common.Constants;
-import jetbrains.buildServer.serverSide.BuildPromotion;
-import jetbrains.buildServer.serverSide.BuildPromotionEx;
-import jetbrains.buildServer.serverSide.ChangeDescriptor;
-import jetbrains.buildServer.serverSide.SBuild;
+import jetbrains.buildServer.serverSide.*;
+import jetbrains.buildServer.serverSide.buildLog.LogMessage;
+import jetbrains.buildServer.serverSide.problems.BuildLogCompileErrorCollector;
+import jetbrains.buildServer.serverSide.problems.BuildProblem;
 import jetbrains.buildServer.users.SUser;
 import jetbrains.buildServer.users.User;
 import jetbrains.buildServer.util.FileUtil;
+import jetbrains.buildServer.util.StringUtil;
 import jetbrains.buildServer.vcs.SVcsModification;
 import jetbrains.buildServer.vcs.SelectPrevBuildPolicy;
 import jetbrains.buildServer.vcs.VcsFileModification;
@@ -37,10 +38,16 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import static com.intellij.openapi.util.text.StringUtil.join;
+import static jetbrains.buildServer.serverSide.impl.problems.types.CompilationErrorTypeDetailsProvider.COMPILE_BLOCK_INDEX;
 
 public class BrokenFileHeuristic implements Heuristic {
 
   private static final Logger LOGGER = Logger.getInstance(BrokenFileHeuristic.class.getName());
+  private final SBuild mySBuild;
+
+  BrokenFileHeuristic(SBuild sBuild) {
+    mySBuild = sBuild;
+  }
 
   @Override
   @NotNull
@@ -56,11 +63,51 @@ public class BrokenFileHeuristic implements Heuristic {
   }
 
   @Override
+  public Pair<User, String> findResponsibleUser(@NotNull final STestRun sTestRun) {
+    final String problemText = sTestRun.getTest().getName().getAsString() + " " + sTestRun.getFullText();
+
+    return findResponsibleUser(problemText);
+  }
+
+  @Override
+  public Pair<User, String> findResponsibleUser(@NotNull final BuildProblem buildProblem) {
+
+    return findResponsibleUser(getBuildProblemText(buildProblem, mySBuild));
+  }
+
+  @NotNull
+  private static String getBuildProblemText(@NotNull final BuildProblem problem, @NotNull final SBuild build) {
+    StringBuilder problemSpecificText = new StringBuilder();
+
+    if (problem.getBuildProblemData().getType().equals(BuildProblemTypes.TC_COMPILATION_ERROR_TYPE)) {
+      final Integer compileBlockIndex = getCompileBlockIndex(problem);
+      if (compileBlockIndex != null) {
+        final List<LogMessage> errors =
+          new BuildLogCompileErrorCollector().collectCompileErrors(compileBlockIndex, (SBuild)build.getBuildLog());
+        for (LogMessage error : errors) {
+          problemSpecificText.append(error.getText()).append(" ");
+        }
+      }
+    }
+
+    return problemSpecificText + " " + problem.getBuildProblemDescription();
+  }
+
   @Nullable
-  public Pair<User, String> findResponsibleUser(@NotNull ProblemInfo problemInfo) {
-    if (problemInfo.getProblemText() == null) return null;
-    SBuild sBuild = problemInfo.getSBuild();
-    final BuildPromotion buildPromotion = sBuild.getBuildPromotion();
+  private static Integer getCompileBlockIndex(@NotNull final BuildProblem problem) {
+    final String compilationBlockIndex = problem.getBuildProblemData().getAdditionalData();
+    if (compilationBlockIndex == null) return null;
+
+    try {
+      return Integer.parseInt(
+        StringUtil.stringToProperties(compilationBlockIndex, StringUtil.STD_ESCAPER2).get(COMPILE_BLOCK_INDEX));
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
+  private Pair<User, String> findResponsibleUser(@NotNull String problemText) {
+    final BuildPromotion buildPromotion = mySBuild.getBuildPromotion();
     if (!(buildPromotion instanceof BuildPromotionEx)) return null;
 
     SelectPrevBuildPolicy prevBuildPolicy = SelectPrevBuildPolicy.SINCE_LAST_BUILD;
@@ -72,7 +119,7 @@ public class BrokenFileHeuristic implements Heuristic {
     SUser responsibleUser = null;
     String brokenFile = null;
     for (SVcsModification vcsChange : vcsChanges) {
-      final String foundBrokenFile = findBrokenFile(vcsChange, problemInfo.getProblemText());
+      final String foundBrokenFile = findBrokenFile(vcsChange, problemText);
       if (foundBrokenFile == null) continue;
 
       final Collection<SUser> changeCommitters = vcsChange.getCommitters();
@@ -80,7 +127,7 @@ public class BrokenFileHeuristic implements Heuristic {
 
       final SUser foundResponsibleUser = changeCommitters.iterator().next();
       if (responsibleUser != null && !responsibleUser.equals(foundResponsibleUser)) {
-        LOGGER.debug("There are more then one committers since last build for failed build #" + sBuild.getBuildId());
+        LOGGER.debug("There are more then one committers since last build for failed build #" + mySBuild.getBuildId());
         return null;
       }
 

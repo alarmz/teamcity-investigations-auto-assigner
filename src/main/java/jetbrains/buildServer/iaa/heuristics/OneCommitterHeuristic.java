@@ -19,17 +19,24 @@ package jetbrains.buildServer.iaa.heuristics;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.util.Pair;
 import java.util.Set;
-import jetbrains.buildServer.iaa.ProblemInfo;
 import jetbrains.buildServer.iaa.common.Constants;
 import jetbrains.buildServer.serverSide.SBuild;
+import jetbrains.buildServer.serverSide.STest;
+import jetbrains.buildServer.serverSide.STestRun;
+import jetbrains.buildServer.serverSide.problems.BuildProblem;
 import jetbrains.buildServer.users.SUser;
 import jetbrains.buildServer.users.User;
 import jetbrains.buildServer.vcs.SelectPrevBuildPolicy;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 public class OneCommitterHeuristic implements Heuristic {
   private static final Logger LOGGER = Logger.getInstance(OneCommitterHeuristic.class.getName());
+  private final SBuild mySBuild;
+
+  OneCommitterHeuristic(SBuild sBuild) {
+    mySBuild = sBuild;
+  }
+
   @Override
   @NotNull
   public String getName() {
@@ -43,23 +50,32 @@ public class OneCommitterHeuristic implements Heuristic {
   }
 
   @Override
-  @Nullable
-  public Pair<User, String> findResponsibleUser(@NotNull ProblemInfo problemInfo) {
-    SBuild build = problemInfo.getSBuild();
+  public Pair<User, String> findResponsibleUser(@NotNull final STestRun sTestRun) {
+    return findResponsibleUser();
+  }
+
+  @Override
+  public Pair<User, String> findResponsibleUser(@NotNull final BuildProblem buildProblem) {
+    return findResponsibleUser();
+  }
+
+  public Pair<User, String> findResponsibleUser() {
     final SelectPrevBuildPolicy selectPrevBuildPolicy = SelectPrevBuildPolicy.SINCE_LAST_BUILD;
-    final Set<SUser> committers = build.getCommitters(selectPrevBuildPolicy).getUsers();
+    final Set<SUser> committers = mySBuild.getCommitters(selectPrevBuildPolicy).getUsers();
     if (committers.isEmpty()) {
-      LOGGER.debug("There are no committers since last build for failed build #" + build.getBuildId());
-      return null;
-    }
-    if (committers.size() != 1) {
-      LOGGER.debug(String.format("There are more then one committers (total: %d) since last build for failed build #%s",
-                                 committers.size() ,build.getBuildId()));
+      LOGGER.debug("There are no committers since last build for failed build #" + mySBuild.getBuildId());
       return null;
     }
 
-    return Pair.create(committers.iterator().next(), String.format("%s you were responsible the only committer to the " +
-                                                                   "build: %s # %s", Constants.REASON_PREFIX,
-                                                                   build.getFullName(), build.getBuildNumber()));
+    if (committers.size() != 1) {
+      LOGGER.debug(String.format("There are more then one committers (total: %d) since last build for failed build #%s",
+                                 committers.size(), mySBuild.getBuildId()));
+      return null;
+    }
+
+    return Pair
+      .create(committers.iterator().next(), String.format("%s you were responsible the only committer to the " +
+                                                          "build: %s # %s", Constants.REASON_PREFIX,
+                                                          mySBuild.getFullName(), mySBuild.getBuildNumber()));
   }
 }
